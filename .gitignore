@@ -1,0 +1,8 @@
+node_modules
+dist
+.env.local
+tsconfig.tsbuildinfo
+backups/
+
+# generated icons are committed; build artefacts are not
+desktop/release/
