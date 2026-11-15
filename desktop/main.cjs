@@ -8,7 +8,7 @@
  */
 const {
   app, BrowserWindow, globalShortcut, screen, ipcMain, desktopCapturer,
-  Tray, Menu, nativeImage, shell,
+  Tray, Menu, nativeImage, shell, session,
 } = require('electron')
 const path = require('node:path')
 const fs = require('node:fs')
@@ -102,10 +102,11 @@ let appUrl = null     // set once the server (or dev server) is known
 // another app. Lives in main because the blur handler is here.
 let pinned = false
 
+let recording = false   // mirrored from the renderer so the chord can act on it
+
 // Once you drag the bar it stays where you put it — but only for this run.
 // A fresh launch starts at the top again, which is the "default" people
 // expect from a summoned bar.
-let recording = false   // mirrored from the renderer so the chord can act on it
 let userMoved = false
 let placing = false   // guards our own setBounds from looking like a drag
 
@@ -149,19 +150,16 @@ function createWindow() {
     if (!win.webContents.isDevToolsOpened()) win.hide()
   })
 
-  // Links open in the real browser, never inside the overlay.
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url)
-    return { action: 'deny' }
-  })
+  win.webContents.setWindowOpenHandler(openLink)
 }
 
-/**
- * Size the window to `height`. Keeps the user's own position once they've
- * dragged it; otherwise centres horizontally near the top of the active
- * display. Always clamped inside the work area so a long answer can't push
- * the bar off-screen.
- */
+// Links open in the real browser, never inside the app — and only web links:
+// openExternal will launch any registered protocol handler it's handed.
+function openLink({ url }) {
+  if (/^https?:\/\//i.test(url)) shell.openExternal(url)
+  return { action: 'deny' }
+}
+
 /**
  * Size to what the renderer measured. Keeps a dragged position; otherwise
  * centres horizontally at the very top of the active display. Growing keeps
@@ -228,10 +226,7 @@ function openFull() {
   full.loadURL(appUrl)
   full.once('ready-to-show', () => full.show())
   full.on('closed', () => { full = null })
-  full.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url)
-    return { action: 'deny' }
-  })
+  full.webContents.setWindowOpenHandler(openLink)
 }
 
 /**
@@ -269,7 +264,6 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 app.whenReady().then(async () => {
-  const { session } = require('electron')
   session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => {
     cb(permission === 'media' || permission === 'audioCapture')
   })
@@ -359,7 +353,9 @@ ipcMain.handle('cortana:capture-screen', async () => {
   await new Promise((r) => setTimeout(r, 180))
 
   try {
-    const { size, scaleFactor } = screen.getPrimaryDisplay()
+    // The screen you're on (where you clicked), not whichever comes first.
+    const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+    const { size, scaleFactor } = display
     const sources = await desktopCapturer.getSources({
       types: ['screen'],
       thumbnailSize: {
@@ -367,8 +363,9 @@ ipcMain.handle('cortana:capture-screen', async () => {
         height: Math.round(size.height * scaleFactor),
       },
     })
-    if (!sources.length) throw new Error('no screen sources available')
-    return sources[0].thumbnail.toDataURL()
+    const src = sources.find((s) => s.display_id === String(display.id)) ?? sources[0]
+    if (!src) throw new Error('no screen sources available')
+    return src.thumbnail.toDataURL()
   } finally {
     if (wasVisible) { win.show(); win.focus() }
   }

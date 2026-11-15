@@ -44,6 +44,10 @@ Either way the token stays on the Vite dev server and never reaches the
 browser. It lives in `.env.local` (gitignored) and must match the
 `HERMES_DASHBOARD_SESSION_TOKEN` the backend was started with.
 
+Because the proxy adds the token for whoever calls it, it refuses requests
+whose `Origin` isn't the app's own — browsers don't apply CORS to WebSockets,
+so otherwise any page you visit could drive the agent.
+
 ## Protocol
 
 Newline-delimited JSON-RPC over `/api/ws` (`src/gateway.ts`, ~140 lines, no
@@ -64,14 +68,16 @@ Voice (`src/voice.ts`) is plain REST:
 
 ## Checks
 
-Two scripts that fail loudly if the hard paths break:
+Scripts that fail loudly if the hard paths break:
 
 ```bash
-node wstest.mjs      # WS upgrade + auth + session + streaming reply
-node audiotest.mjs   # TTS -> STT round trip
+node wstest.mjs              # WS upgrade + auth + session + streaming reply
+node audiotest.mjs           # TTS -> STT round trip
+node wsproxytest.mjs <port>  # WS through the desktop app's own server
 ```
 
-Both need the dev server up. `audiotest.mjs` is a genuine round trip: it
+The first two need the dev server up; `wsproxytest.mjs` needs the desktop
+app running. `audiotest.mjs` is a genuine round trip: it
 synthesises speech, feeds that audio back to Whisper, and prints what came
 back.
 
@@ -171,6 +177,4 @@ re-running the block in git history or editing the gradient constants.
 
 - Not packaged. `electron-builder` would produce a real installable `.exe`;
   today autostart depends on this folder and Node staying where they are.
-- No reconnect UI: if the tunnel is down at launch, chat shows `failed` and
-  you restart the app. The tunnel itself does auto-retry every 5s.
 - Chord is an env var, not a settings screen.

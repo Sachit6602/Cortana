@@ -9,7 +9,7 @@ declare global {
     cortana?: {
       isDesktop: boolean;
       captureScreen: () => Promise<string>;
-      resize?: (height: number) => void;
+      resize?: (size: { wide: boolean; height: number }) => void;
       hide?: () => void;
       setPinned?: (v: boolean) => void;
       openFull?: () => void;

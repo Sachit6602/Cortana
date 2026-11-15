@@ -29,14 +29,28 @@ function serveStatic(distDir, req, res) {
   if (!file.startsWith(path.resolve(distDir)) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
     file = path.join(distDir, 'index.html')
   }
+  if (!fs.existsSync(file)) {
+    // Otherwise the read stream errors unhandled and crashes the main process.
+    res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' })
+    return res.end('No build found: run `npm run build` in the project root.')
+  }
   res.writeHead(200, { 'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream' })
   fs.createReadStream(file).pipe(res)
 }
 
 /** @returns {Promise<{port:number, close:()=>void}>} */
 function startServer({ distDir, apiHost, apiPort, token }) {
+  // Browsers don't apply CORS to WebSockets, and a no-cors POST still lands,
+  // so without this any page you visit could drive the agent through here.
+  // Host shuts out DNS rebinding; Origin shuts out other sites.
+  const trusted = (req) => {
+    const self = `127.0.0.1:${server.address().port}`
+    return req.headers.host === self && (!req.headers.origin || req.headers.origin === `http://${self}`)
+  }
+
   const server = http.createServer((req, res) => {
     if (!req.url.startsWith('/api')) return serveStatic(distDir, req, res)
+    if (!trusted(req)) { res.writeHead(403); return res.end() }
 
     const upstream = http.request(
       {
@@ -60,6 +74,7 @@ function startServer({ distDir, apiHost, apiPort, token }) {
 
   // WebSocket upgrade: /api/ws takes auth as a query param, not a header.
   server.on('upgrade', (req, socket, head) => {
+    if (!trusted(req)) return socket.destroy()
     const sep = req.url.includes('?') ? '&' : '?'
     const upstream = http.request({
       host: apiHost,

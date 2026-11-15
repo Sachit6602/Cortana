@@ -86,7 +86,7 @@ export default function Bar() {
   // Report measured size so main can grow the window downward.
   useLayoutEffect(() => {
     const h = shell.current?.getBoundingClientRect().height ?? 0;
-    window.cortana?.resize?.({ wide, height: Math.ceil(h) + 44 } as never);
+    window.cortana?.resize?.({ wide, height: Math.ceil(h) + 44 });
   }, [wide, c.messages, c.notice, c.busy]);
 
   useEffect(() => {

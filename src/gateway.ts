@@ -55,11 +55,13 @@ export class Gateway {
     return new Promise((resolve, reject) => {
       const ws = new WebSocket(url);
       this.ws = ws;
+      let opened = false;
 
       const failFast = () => reject(new Error("WebSocket connection failed"));
       ws.addEventListener("error", failFast, { once: true });
 
       ws.addEventListener("open", () => {
+        opened = true;
         ws.removeEventListener("error", failFast);
         resolve();
       });
@@ -71,9 +73,12 @@ export class Gateway {
           p.reject(new Error("WebSocket closed"));
           this.pending.delete(id);
         }
-        const wasOpen = this.ws === ws;
+        if (this.ws !== ws) return; // a stale socket must not clear the live one
         this.ws = null;
-        if (wasOpen) this.onClose?.();
+        // Only a drop of an established socket. A failed connect is already
+        // reported by the rejected promise; reporting it here too made the
+        // caller schedule two retries per failure, doubling every attempt.
+        if (opened) this.onClose?.();
       });
 
       ws.addEventListener("message", (ev) => this.onFrame(String(ev.data)));

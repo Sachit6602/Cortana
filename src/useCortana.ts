@@ -76,6 +76,11 @@ export function useCortana(opts: { speakReplies?: boolean } = {}) {
     // laptop sleep. Either way: keep trying rather than dying on attempt one.
     let attempt = 0;
     let retry: ReturnType<typeof setTimeout> | undefined;
+    // One pending retry at most, whichever path asks last.
+    const schedule = (ms: number) => {
+      clearTimeout(retry);
+      retry = setTimeout(open, ms);
+    };
 
     const open = async () => {
       if (dead) return;
@@ -98,7 +103,7 @@ export function useCortana(opts: { speakReplies?: boolean } = {}) {
             ? `${err instanceof Error ? err.message : String(err)} — retrying…`
             : null,
         );
-        retry = setTimeout(open, wait);
+        schedule(wait);
       }
     };
 
@@ -107,7 +112,7 @@ export function useCortana(opts: { speakReplies?: boolean } = {}) {
       if (dead) return;
       sessionId.current = null;
       setConn("connecting");
-      retry = setTimeout(open, 1000);
+      schedule(1000);
     });
 
     void open();

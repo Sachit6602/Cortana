@@ -63,7 +63,7 @@ export default function Status() {
             Start the backend with a matching token:
             <br />
             <code>
-              HERMES_DASHBOARD_SESSION_TOKEN=<your-token> hermes serve --port 9500
+              {"HERMES_DASHBOARD_SESSION_TOKEN=<your-token> hermes serve --port 9500"}
             </code>
           </p>
         </div>
